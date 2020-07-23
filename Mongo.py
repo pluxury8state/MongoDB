@@ -2,6 +2,25 @@ import csv
 import re
 from pprint import pprint
 import pymongo
+from _datetime import datetime
+
+
+def date_sort(db, first_date, second_date):
+    fd = from_string_to_datetime(first_date)
+    sd = from_string_to_datetime(second_date)
+    sorted_database = db.art_col.find({'Дата':{'$lte': sd, '$gte': fd}}).sort('Дата', 1)
+    for i in sorted_database:
+        print(i)
+
+
+def from_string_to_datetime(string_with_date):
+    date_massive = ['2020']
+    date_massive += string_with_date.split('.')
+    true_massive = []
+    for i in date_massive:
+        true_massive.append(int(i))
+    datetime_obj = datetime(true_massive[0], true_massive[2], true_massive[1])
+    return datetime_obj
 
 
 def read_data(csv_file, db):
@@ -16,13 +35,18 @@ def read_data(csv_file, db):
         for row in reader:
             artists_list.append(row)
 
+        for person in artists_list:
+            price = person['Цена']
+            person['Цена'] = int(price)
+            person['Дата'] = from_string_to_datetime(person['Дата'])
+
     #art_col - коллекция
 
-    Dbase = db.art_col.insert_many(artists_list)
-
-    pprint(Dbase.inserted_ids)
+    db.art_col.insert_many(artists_list)
 
 
+def delete_data(db):
+    db.art_col.drop()
 
 
 def find_cheapest(db):
@@ -31,7 +55,7 @@ def find_cheapest(db):
     Документация: https://docs.mongodb.com/manual/reference/method/cursor.sort/
     """
 
-    sorted_database = db.art_col.find().sort('Цена', -1)
+    sorted_database = db.art_col.find().sort('Цена', 1)
     for i in sorted_database:
         print(i)
 
@@ -42,20 +66,28 @@ def find_by_name(name, db):
     и вернуть их по возрастанию цены
     """
 
-    regex = re.compile('укажите регулярное выражение для поиска. ' \
-                       'Обратите внимание, что в строке могут быть специальные символы, их нужно экранировать')
+    regex = re.compile(f'(.)*({name})(.)*')
+    sorted_database = db.art_col.find({'Исполнитель': regex}).sort('Цена', 1)
 
+    for i in sorted_database:
+        print(i)
 
 if __name__ == '__main__':
 
-    # a = (read_data('artists.csv', 21))
-
-    client = pymongo.MongoClient("mongodb+srv://Oleg:segere61@claster1.o4pxn.mongodb.net/Music?retryWrites=true&w=majority")
+    client = pymongo.MongoClient()
 
     music_artists_db = client['m_artists']#база данных
 
-    # read_data('artists.csv', music_artists_db) #передал данные из csv в БД
+    delete_data(music_artists_db)#удалить коллекцию из БД
 
-    find_cheapest(music_artists_db)# тут почему-то происходит кривая сортировка
+    read_data('artists.csv', music_artists_db) #передал данные из csv в БД
 
+    find_cheapest(music_artists_db)
 
+    find_by_name('Th', music_artists_db)
+
+    first_date = input('введите с какого числа нужно вести поиск(без года, через точку , сначала число , потом месяц):')
+
+    second_date = input('введите по какое число нужно вести поиск(без года, через точку , сначала число , потом месяц):')
+
+    date_sort(music_artists_db, first_date, second_date)
